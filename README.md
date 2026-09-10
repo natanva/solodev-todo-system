@@ -1,7 +1,7 @@
 # /todo — a task manager for solo coders, native to Claude Code
 
-> **Working name pending.** Markdown issues that live in your repo, a 4-letter
-> command, and zero dependencies. The anti-overkill issue tracker.
+> Markdown issues that live in your repo, a 4-letter command, and zero
+> dependencies. The anti-overkill issue tracker.
 
 Type `/todo` in Claude Code and get this:
 
