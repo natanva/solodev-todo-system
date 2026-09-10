@@ -51,8 +51,8 @@ Generated from the toy project in [`examples/demo/`](examples/demo/) — run it 
 echo "{\"cwd\":\"$PWD/examples/demo\"}" | python3 hooks/todo_status.py --full --lang en
 ```
 
-(The `Git:` line shows your real branch and working-tree state; the demo folder
-is not a git repo, so there it prints empty.)
+(The `Git:` line shows the branch, working-tree state and last commits of the
+enclosing git repo — in your project, yours.)
 
 ## What it is
 
