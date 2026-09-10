@@ -10,8 +10,9 @@ Type `/todo` in Claude Code and get this:
   demo — issues status
 ═══════════════════════════════════════════════════════════
 
-🎯 Current sprint — Ship the MVP waitlist (until 2026-07-15)
+🎯 Sprint 002-mvp-waitlist — Ship the MVP waitlist (until 2026-07-15)
    ✔ chore-set-up-analytics · epic-launch-mvp [1/2 ✔]
+⏭ 003-post-launch-polish (planned) — Post-launch polish · 1 issue
 
 Git: branch=main | working tree: clean
 
@@ -32,7 +33,7 @@ Issues (6 files in docs/issues/open/) — committed: 2 active · 1 ready | uncom
  💤 Backlog — future, no commitment (2)
 ───────────────────────────────────────────────────────────
 
-    • MEDIA plan-dark-mode
+    • MEDIA plan-dark-mode · ⏭ 003-post-launch-polish
             Dark mode for the dashboard
     · BAJA  bug-mobile-nav-overlap · ⛓ gate: needs a real iOS device to reproduce
             Mobile nav overlaps the header on iOS Safari
@@ -76,14 +77,19 @@ instead of a generic todo list:
   with *won't start yet* with *waiting for me to decide*.
 - **Epics** (`type: epic`) group plans/bugs/chores via `parent:` and always
   render as one tree — every child nests under its epic with a `[status]` badge,
-  never scattered across status groups. **One sprint** (`sprint.md`) declares
-  what you're focused on; its members get 🎯. Closed includes stay in the file
-  as the record of what the sprint shipped (✔ with `[n/m]` progress); when all
-  are closed the sprint is complete and you write the next one — the history
-  between sprints lives in `git log docs/issues/sprint.md`.
+  never scattered across status groups.
+- **Sprints open, run and close.** One file per sprint in `docs/issues/sprints/`
+  (`NNN-<slug>.md`, `status: planned | active | closed`). Only one is active at
+  a time (⚠ if more); its members get 🎯 and closed includes stay listed as the
+  record of what it shipped (✔ with `[n/m]` progress). An issue that's decided
+  but not for now goes into a `planned` sprint — the queue of what comes next —
+  and its line gets a `⏭ <sprint>` tag. When every include is closed the
+  renderer tells you: close the sprint, activate the next planned one. Closed
+  sprint files stay in the directory as the history.
 - The renderer **validates invariants** and prints ⚠ warnings: unknown statuses,
   gates pointing at closed or nonexistent issues, frozen items outside backlog,
-  active issues that escaped the sprint.
+  active issues that escaped the sprint, more than one active sprint, planned
+  includes already closed.
 
 The full frontmatter reference and the working rules (when to create, how
 phases close, the DONE discipline, changelog format) live in
@@ -110,7 +116,7 @@ system; the script just renders it.
    - `commands/todo.md` → `.claude/commands/todo.md`
    - `hooks/todo_status.py` → `.claude/hooks/todo_status.py`
    - `templates/new-issue.sh` → `scripts/new-issue.sh` (`chmod +x`)
-   - `templates/sprint.md` → `docs/issues/sprint.md`
+   - `templates/sprints/` → `docs/issues/sprints/` (README + first-sprint template)
 2. `mkdir -p docs/issues/open docs/issues/done`
 3. Paste [`templates/CLAUDE-issues.md`](templates/CLAUDE-issues.md) into your
    repo's `CLAUDE.md`.
@@ -181,7 +187,7 @@ hooks/todo_status.py      # deterministic renderer — the only executable piece
 templates/
   CLAUDE-issues.md        # the system's rules — paste into your CLAUDE.md
   new-issue.sh            # issue scaffolder
-  sprint.md               # sprint file template
+  sprints/                # sprints directory template (README + first sprint)
 examples/demo/            # toy project used to generate the README output
 ```
 

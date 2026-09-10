@@ -33,10 +33,18 @@ the epic header in the EPIC's group, whatever the child's own `status:` — a
 `[status]` badge on each child carries what the group no longer implies.
 Children of an epic never render in their own status group.
 
-The sprint (sprint.md) shows as a banner on top and its members (includes +
-direct children of an included epic) are marked 🎯. Invariants are validated
-and rendered as ⚠ (unknown status, frozen_by outside backlog, broken or
-already-closed gates, sprint includes in backlog, active outside the sprint).
+Sprints: one file per sprint in docs/issues/sprints/NNN-<slug>.md with
+`status: planned | active | closed` (at most ONE active). The active sprint
+shows as a banner on top and its members (includes + direct children of an
+included epic) are marked 🎯; closed includes stay listed as the shipped
+record (✔ + [n/m] progress) and when all are closed the sprint is complete —
+close it and activate the next planned one. Planned sprints render one ⏭
+line each and their member issues carry a `⏭ <sprint>` tag ("this task goes
+to that sprint"). Closed sprint files are the archive and are not rendered.
+A single docs/issues/sprint.md is still supported as a fallback (it acts as
+the active sprint). Invariants are validated and rendered as ⚠ (unknown
+status, frozen_by outside backlog, broken or already-closed gates, active
+sprint includes in backlog, active outside the sprint, >1 active sprint).
 
 Language: display strings live in MESSAGES (en/es). Frontmatter tokens
 (active/ready/backlog, field names, phase statuses, priorities) are syntax
@@ -62,6 +70,7 @@ REPO: Path | None = None
 ISSUES_OPEN: Path | None = None
 ISSUES_DONE: Path | None = None
 SPRINT_FILE: Path | None = None
+SPRINTS_DIR: Path | None = None
 PROJECT_NAME = ""
 CONFIG_FILE = Path(__file__).resolve().parent / "todo.config.json"
 
@@ -124,12 +133,19 @@ MESSAGES = {
         "warn_frozen_status": "{name}: frozen_by with status '{st}' — frozen only applies to backlog",
         "warn_parent_missing": "{name}: parent '{p}' does not exist in open/ — reparent or close",
         "warn_unknown_status": "{name}: unknown status '{st}' — use active|ready|backlog",
-        "warn_sprint_missing": "sprint: include '{slug}' exists in neither open/ nor done/ — typo? update sprint.md",
+        "warn_sprint_missing": "{sp}: include '{slug}' exists in neither open/ nor done/ — typo? update the sprint file",
         "sprint_complete": "   ✔ every include is closed — sprint complete: review it, then write the next one in sprint.md",
+        "sprint_complete_next": "   ✔ every include is closed — sprint complete: close it (status: closed + closed date) and activate {next}",
+        "sprint_complete_dir": "   ✔ every include is closed — sprint complete: close it (status: closed + closed date) and open the next one in docs/issues/sprints/",
+        "sprint_head_named": "🎯 Sprint {name}",
+        "sprint_planned": "⏭ {name} (planned)",
+        "warn_multi_active": "sprints: more than one active sprint ({names}) — only one can be active",
+        "warn_planned_done": "{sp}: include '{slug}' is already closed in done/ — drop it from the planned sprint",
         "warn_sprint_backlog": "sprint: include '{slug}' is in backlog — promote to ready/active or drop it from the sprint",
         "warn_active_no_sprint": "{name}: active but outside the sprint — include it or demote to ready",
         "warn_backlog_progress": "{name}: {n} phase(s) done but status backlog — work has started; promote to ready/active or supersede the remaining phases",
         "files_of_record": "Files of record: docs/issues/open/, docs/issues/sprint.md, docs/issues/done/, docs/changelog.md",
+        "files_of_record_sprints": "Files of record: docs/issues/open/, docs/issues/sprints/, docs/issues/done/, docs/changelog.md",
         "dig_deeper": "To dig deeper: read the issue file. `ls docs/issues/open/` is the index; `grep -l 'status: ready' docs/issues/open/*.md` to filter.",
     },
     "es": {
@@ -166,12 +182,19 @@ MESSAGES = {
         "warn_frozen_status": "{name}: frozen_by con status '{st}' — frozen solo aplica a backlog",
         "warn_parent_missing": "{name}: el parent '{p}' no existe en open/ — reparentar o cerrar",
         "warn_unknown_status": "{name}: status desconocido '{st}' — usa active|ready|backlog",
-        "warn_sprint_missing": "sprint: el include '{slug}' no existe ni en open/ ni en done/ — ¿typo? actualiza sprint.md",
+        "warn_sprint_missing": "{sp}: el include '{slug}' no existe ni en open/ ni en done/ — ¿typo? actualiza el archivo del sprint",
         "sprint_complete": "   ✔ todos los includes están cerrados — sprint completo: repásalo y escribe el siguiente en sprint.md",
+        "sprint_complete_next": "   ✔ todos los includes están cerrados — sprint completo: ciérralo (status: closed + fecha closed) y activa {next}",
+        "sprint_complete_dir": "   ✔ todos los includes están cerrados — sprint completo: ciérralo (status: closed + fecha closed) y abre el siguiente en docs/issues/sprints/",
+        "sprint_head_named": "🎯 Sprint {name}",
+        "sprint_planned": "⏭ {name} (planificado)",
+        "warn_multi_active": "sprints: más de un sprint activo ({names}) — solo puede haber uno",
+        "warn_planned_done": "{sp}: el include '{slug}' ya está cerrado en done/ — sácalo del sprint planificado",
         "warn_sprint_backlog": "sprint: el include '{slug}' está en backlog — súbelo a ready/active o sácalo del sprint",
         "warn_active_no_sprint": "{name}: activo pero fuera del sprint — inclúyelo o bájalo a ready",
         "warn_backlog_progress": "{name}: {n} fase(s) done pero status backlog — hay trabajo empezado; súbelo a ready/active o marca superseded lo que quede",
         "files_of_record": "Archivos de referencia: docs/issues/open/, docs/issues/sprint.md, docs/issues/done/, docs/changelog.md",
+        "files_of_record_sprints": "Archivos de referencia: docs/issues/open/, docs/issues/sprints/, docs/issues/done/, docs/changelog.md",
         "dig_deeper": "Para profundizar: lee el archivo del issue. `ls docs/issues/open/` es el índice; `grep -l 'status: ready' docs/issues/open/*.md` para filtrar.",
     },
 }
@@ -341,24 +364,63 @@ def closed_in_done(slug: str) -> bool:
         return False
 
 
-def read_sprint() -> dict | None:
-    """Parse docs/issues/sprint.md → {goal, ends, includes:set}. None if absent."""
+def read_sprint_file(path: Path) -> dict | None:
+    """Parse one sprint file → {name, status, goal, ends, includes:set}."""
     try:
-        text = SPRINT_FILE.read_text(encoding="utf-8")
+        text = path.read_text(encoding="utf-8")
     except Exception:
         return None
-    fm = parse_frontmatter(text) or {}
+    fm = parse_frontmatter(text)
+    if fm is None:
+        return None
     inc = fm.get("includes") or []
     if isinstance(inc, str):
         inc = [inc] if inc.strip() else []
     includes = {i.strip().strip('"').strip("'") for i in inc if i.strip()}
-    goal = fm.get("goal") if isinstance(fm.get("goal"), str) else ""
-    ends = fm.get("ends") if isinstance(fm.get("ends"), str) else ""
-    goal = goal.strip().strip('"').strip("'")
-    ends = ends.strip().strip('"').strip("'")
-    if not (includes or goal):
-        return None
-    return {"goal": goal, "ends": ends, "includes": includes}
+    return {
+        "name": path.stem,
+        "status": _str_field(fm, "status"),
+        "goal": _str_field(fm, "goal"),
+        "ends": _str_field(fm, "ends"),
+        "includes": includes,
+    }
+
+
+def read_sprints() -> dict:
+    """Sprint model → {active: sprint|None, planned: [sprints], extra_active}.
+
+    Preferred layout: docs/issues/sprints/NNN-<slug>.md, one file per sprint
+    with `status: planned | active | closed`. Files whose stem does not start
+    with a digit (README etc.) are ignored; `planned` keeps filename order
+    (the NNN prefix is the queue). Closed sprints are the archive — parsed
+    over only to be skipped. `extra_active` collects the names of any active
+    sprint beyond the first (an invariant violation, warned about later).
+
+    Fallback: the single docs/issues/sprint.md acts as the active sprint
+    (name "" marks the legacy mode for the banner's completion hint).
+    """
+    out: dict = {"active": None, "planned": [], "extra_active": []}
+    if SPRINTS_DIR.is_dir():
+        for p in sorted(SPRINTS_DIR.glob("*.md")):
+            if not p.stem[:1].isdigit():
+                continue
+            sp = read_sprint_file(p)
+            # An empty file (the untouched template) is not a sprint yet.
+            if not sp or not (sp["includes"] or sp["goal"]):
+                continue
+            if sp["status"] == "active":
+                if out["active"] is None:
+                    out["active"] = sp
+                else:
+                    out["extra_active"].append(sp["name"])
+            elif sp["status"] == "planned":
+                out["planned"].append(sp)
+        return out
+    sp = read_sprint_file(SPRINT_FILE)
+    if sp and (sp["includes"] or sp["goal"]):
+        sp["name"] = ""
+        out["active"] = sp
+    return out
 
 
 def git_snapshot() -> tuple[str, str, list[str]]:
@@ -388,12 +450,14 @@ def git_snapshot() -> tuple[str, str, list[str]]:
     return branch, status_summary, log
 
 
-def annotate(issues: list[dict], sprint: dict | None) -> tuple[list[str], set[str]]:
+def annotate(issues: list[dict], sprints: dict) -> tuple[list[str], set[str]]:
     """Compute per-issue render annotations + invariant warnings.
 
     Sets on each issue: `chain` (⛓ markers), `frozen_eff` (own or inherited
-    frozen_by), `group` (render bucket). Returns (warnings, sprint_slugs) where
-    sprint_slugs = includes ∪ direct children of included epics.
+    frozen_by), `group` (render bucket), `next_sprint` (name of the planned
+    sprint the issue is queued for, if any). Returns (warnings, sprint_slugs)
+    where sprint_slugs = the ACTIVE sprint's includes ∪ direct children of
+    included epics (the 🎯 set).
     """
     warnings: list[str] = []
     open_slugs = {it["name"] for it in issues}
@@ -439,24 +503,51 @@ def annotate(issues: list[dict], sprint: dict | None) -> tuple[list[str], set[st
         if it["group"] == "backlog" and it["phases_done"]:
             warnings.append(t("warn_backlog_progress", name=it["name"], n=it["phases_done"]))
 
+    active_sp = sprints.get("active")
     sprint_slugs: set[str] = set()
-    if sprint:
-        sprint_slugs = set(sprint["includes"])
+    if active_sp:
+        label = active_sp["name"] or "sprint"
+        sprint_slugs = set(active_sp["includes"])
         for it in issues:
-            if it["parent"] in sprint["includes"]:
+            if it["parent"] in active_sp["includes"]:
                 sprint_slugs.add(it["name"])
-        for slug in sprint["includes"]:
+        for slug in active_sp["includes"]:
             if slug not in open_slugs:
-                # A closed include stays in sprint.md as the record of what the
-                # sprint shipped (banner paints it ✔); warn only on a slug that
-                # exists nowhere.
+                # A closed include stays in the sprint file as the record of
+                # what the sprint shipped (banner paints it ✔); warn only on a
+                # slug that exists nowhere.
                 if not closed_in_done(slug):
-                    warnings.append(t("warn_sprint_missing", slug=slug))
+                    warnings.append(t("warn_sprint_missing", sp=label, slug=slug))
             elif by_name[slug]["status"] == "backlog":
                 warnings.append(t("warn_sprint_backlog", slug=slug))
         for it in issues:
             if it["status"] == "active" and it["name"] not in sprint_slugs:
                 warnings.append(t("warn_active_no_sprint", name=it["name"]))
+
+    if sprints.get("extra_active"):
+        names = [active_sp["name"]] if active_sp else []
+        names += sprints["extra_active"]
+        warnings.append(t("warn_multi_active", names=", ".join(names)))
+
+    # Planned sprints: members get a ⏭ <sprint> tag ("this task goes to that
+    # sprint"). backlog status is fine there — planned IS the parking with a
+    # destination. Validate only existence: a planned include must still be
+    # open (a closed one is stale planning).
+    for sp in sprints.get("planned", []):
+        members = set(sp["includes"])
+        for it in issues:
+            if it["parent"] in sp["includes"]:
+                members.add(it["name"])
+        for slug in sp["includes"]:
+            if slug not in open_slugs:
+                if closed_in_done(slug):
+                    warnings.append(t("warn_planned_done", sp=sp["name"], slug=slug))
+                else:
+                    warnings.append(t("warn_sprint_missing", sp=sp["name"], slug=slug))
+        for it in issues:
+            if (it["name"] in members and not it.get("next_sprint")
+                    and it["name"] not in sprint_slugs):
+                it["next_sprint"] = sp["name"]
 
     return warnings, sprint_slugs
 
@@ -477,6 +568,8 @@ def render_item(it: dict, connector: str | None = None,
     extras.extend(it.get("chain", []))
     if it["frozen_by"]:
         extras.append(f"frozen_by: {it['frozen_by']}")
+    if it.get("next_sprint"):
+        extras.append(f"⏭ {it['next_sprint']}")
     if it["parent"] and connector is None:
         extras.append(f"parent: {it['parent']}")
     extra_str = " · " + " · ".join(extras) if extras else ""
@@ -505,6 +598,8 @@ def render_epic_header(it: dict, sprint: set | None = None) -> str:
     extras.extend(it.get("chain", []))
     if it["frozen_by"]:
         extras.append(f"frozen_by: {it['frozen_by']}")
+    if it.get("next_sprint"):
+        extras.append(f"⏭ {it['next_sprint']}")
     extra_str = " · " + " · ".join(extras) if extras else ""
     tag = f" [{it['priority']}]" if it["priority"] else ""
     mark = f" {SPRINT_MARK}" if sprint and it["name"] in sprint else ""
@@ -552,22 +647,42 @@ def render_section(items: list[dict], kids_of: dict[str, list[dict]],
     return lines
 
 
-def render_sprint_banner(sprint: dict | None) -> list[str]:
-    if not sprint:
-        return []
-    head = t("sprint_head")
-    if sprint["goal"]:
-        head += f" — {sprint['goal']}"
-    if sprint["ends"]:
-        head += t("sprint_until", ends=sprint["ends"])
-    lines = [head]
-    if sprint["includes"]:
-        done = {s for s in sprint["includes"] if closed_in_done(s)}
-        marked = [("✔ " + s) if s in done else s for s in sorted(sprint["includes"])]
-        progress = f" [{len(done)}/{len(sprint['includes'])} ✔]" if done else ""
-        lines.append("   " + " · ".join(marked) + progress)
-        if len(done) == len(sprint["includes"]):
-            lines.append(t("sprint_complete"))
+def render_sprint_banner(sprints: dict) -> list[str]:
+    lines: list[str] = []
+    active = sprints.get("active")
+    if active:
+        if active["name"]:
+            head = t("sprint_head_named", name=active["name"])
+        else:
+            head = t("sprint_head")
+        if active["goal"]:
+            head += f" — {active['goal']}"
+        if active["ends"]:
+            head += t("sprint_until", ends=active["ends"])
+        lines.append(head)
+        if active["includes"]:
+            done = {s for s in active["includes"] if closed_in_done(s)}
+            marked = [("✔ " + s) if s in done else s for s in sorted(active["includes"])]
+            progress = f" [{len(done)}/{len(active['includes'])} ✔]" if done else ""
+            lines.append("   " + " · ".join(marked) + progress)
+            if len(done) == len(active["includes"]):
+                planned = sprints.get("planned") or []
+                if not active["name"]:
+                    lines.append(t("sprint_complete"))
+                elif planned:
+                    lines.append(t("sprint_complete_next", next=planned[0]["name"]))
+                else:
+                    lines.append(t("sprint_complete_dir"))
+    for sp in sprints.get("planned", []):
+        seg = t("sprint_planned", name=sp["name"])
+        if sp["goal"]:
+            seg += f" — {sp['goal']}"
+        if sp["ends"]:
+            seg += t("sprint_until", ends=sp["ends"])
+        if sp["includes"]:
+            n = len(sp["includes"])
+            seg += f" · {n} issue" + ("s" if n != 1 else "")
+        lines.append(seg)
     return lines
 
 
@@ -577,10 +692,10 @@ def group_header(g: str, n: int) -> list[str]:
 
 
 def render(issues: list[dict], branch: str, status: str, log: list[str],
-           sprint: dict | None = None, full: bool = False) -> str:
+           sprints: dict, full: bool = False) -> str:
     lines = [FRAME, f"  {t('title', name=PROJECT_NAME)}", FRAME]
 
-    banner = render_sprint_banner(sprint)
+    banner = render_sprint_banner(sprints)
     if banner:
         lines.append("")
         lines.extend(banner)
@@ -591,7 +706,7 @@ def render(issues: list[dict], branch: str, status: str, log: list[str],
         for entry in log:
             lines.append(f"  {entry}")
 
-    warnings, sprint_slugs = annotate(issues, sprint)
+    warnings, sprint_slugs = annotate(issues, sprints)
 
     groups: dict[str, list[dict]] = {g: [] for g in GROUP_ORDER}
     for it in issues:
@@ -695,13 +810,14 @@ def render(issues: list[dict], branch: str, status: str, log: list[str],
                 lines.append(render_item(it, sprint=sprint_slugs))
 
     lines.append("")
-    lines.append(t("files_of_record"))
+    lines.append(t("files_of_record_sprints") if SPRINTS_DIR.is_dir()
+                 else t("files_of_record"))
     lines.append(t("dig_deeper"))
     return "\n".join(lines)
 
 
 def main() -> int:
-    global LANG, REPO, ISSUES_OPEN, ISSUES_DONE, SPRINT_FILE, PROJECT_NAME
+    global LANG, REPO, ISSUES_OPEN, ISSUES_DONE, SPRINT_FILE, SPRINTS_DIR, PROJECT_NAME
     try:
         payload = json.load(sys.stdin)
     except Exception:
@@ -713,15 +829,16 @@ def main() -> int:
     ISSUES_OPEN = repo / "docs/issues/open"
     ISSUES_DONE = repo / "docs/issues/done"
     SPRINT_FILE = repo / "docs/issues/sprint.md"
+    SPRINTS_DIR = repo / "docs/issues/sprints"
     cfg = read_config()
     PROJECT_NAME = str(cfg.get("name") or repo.name)
     LANG = resolve_lang(sys.argv[1:], cfg)
     full = "--full" in sys.argv[1:]
     try:
         issues = collect_open_issues()
-        sprint = read_sprint()
+        sprints = read_sprints()
         branch, status, log = git_snapshot()
-        sys.stdout.write(render(issues, branch, status, log, sprint=sprint, full=full))
+        sys.stdout.write(render(issues, branch, status, log, sprints=sprints, full=full))
     except Exception:
         return 0
     return 0

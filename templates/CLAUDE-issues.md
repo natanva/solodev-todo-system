@@ -7,7 +7,7 @@
 | Directory | Content |
 |-----------|---------|
 | `docs/issues/open/` | Open issues. Sub-divided by the frontmatter `status:` — not by subdirectory. |
-| `docs/issues/sprint.md` | **Current sprint** (a single one, not a history): `goal` + optional `ends` + `includes` (committed slugs). Source of truth for "what we are focused on now"; the renderer shows it above `/todo` and marks included issues 🎯. |
+| `docs/issues/sprints/` | **Sprints**, one file per sprint (`NNN-<slug>.md`) with `status: planned \| active \| closed` + `goal` + `includes` (committed slugs). **Only one `active`** (the renderer prints ⚠ if there are more); `planned` sprints are the queue of what comes next (the renderer paints them ⏭ and tags their issues); `closed` sprints stay as history. Full frontmatter and lifecycle in `docs/issues/sprints/README.md`. |
 | `docs/issues/done/` | Closed issues (prefixed `YYYY-MM_`) |
 | `docs/changelog.md` | Chronological narrative of significant changes |
 
@@ -57,7 +57,9 @@ phases:                         # optional: for type=plan|epic with multiple pha
 - `scripts/new-issue.sh <type> "<title>" [priority]` creates the file in `docs/issues/open/` with minimal scaffolding.
 - Do not create loose `.md` tracking files in the repo root.
 
-**When starting implementation**: the file is already in `open/` — it does not move between directories; raise its `status:` (backlog → ready when committing to it, ready → active when starting it) and, if there is a sprint, add it to `includes` in `sprint.md`.
+**When starting implementation**: the file is already in `open/` — it does not move between directories; raise its `status:` (backlog → ready when committing to it, ready → active when starting it) and, if there is an active sprint, add it to its `includes` in `docs/issues/sprints/`.
+
+**Sprint lifecycle** (details in `docs/issues/sprints/README.md`): an issue that is decided but not for now goes into the `includes` of a `planned` sprint. A closed include is NOT removed from the sprint (it stays as the ✔ record). When every include of the active sprint is closed, the renderer tells you: review it, set `status: closed` + `closed: YYYY-MM-DD`, and activate the next `planned` one (`status: active` + `opened:`). Unfinished includes move explicitly (your decision) to the next sprint or back to backlog.
 
 **When completing a phase**:
 - Update `phases[].status: done` and `closed: YYYY-MM-DD` in the frontmatter.
