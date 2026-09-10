@@ -1,0 +1,12 @@
+---
+description: Markdown issue & sprint management for this repo (docs/issues/ layout)
+alwaysApply: true
+---
+
+Follow the issue-management rules in `docs/issues-rules.md` — it is the single
+source of truth for how issues, sprints and the changelog work in this repo
+(frontmatter model, statuses, closure discipline).
+
+When the user asks for the todo/status listing, run
+`python3 scripts/todo_status.py --full` and paste the ENTIRE output verbatim
+inside one code block — never summarize, trim or reformat it.

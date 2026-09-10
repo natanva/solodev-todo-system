@@ -1,7 +1,9 @@
 # /todo — a task manager for solo coders, native to Claude Code
 
 > Markdown issues that live in your repo, a 4-letter command, and zero
-> dependencies. The anti-overkill issue tracker.
+> dependencies. The anti-overkill issue tracker. Born in Claude Code; works
+> with Codex, Cursor and any AGENTS.md-aware agent
+> ([Other agents](#other-agents-codex-cursor-anything-agentsmd-aware)).
 
 Type `/todo` in Claude Code and get this:
 
@@ -93,7 +95,7 @@ instead of a generic todo list:
 
 The full frontmatter reference and the working rules (when to create, how
 phases close, the DONE discipline, changelog format) live in
-[`templates/CLAUDE-issues.md`](templates/CLAUDE-issues.md) — that file *is* the
+[`templates/issues-rules.md`](templates/issues-rules.md) — that file *is* the
 system; the script just renders it.
 
 ## Usage
@@ -110,7 +112,7 @@ system; the script just renders it.
 - **Close**: when verification is green, Claude proposes the move to `done/`
   plus the changelog entry; you say "ok".
 
-## Install (manual, ~2 minutes)
+## Install for Claude Code (manual, ~2 minutes)
 
 1. Copy into your repo:
    - `commands/todo.md` → `.claude/commands/todo.md`
@@ -118,13 +120,44 @@ system; the script just renders it.
    - `templates/new-issue.sh` → `scripts/new-issue.sh` (`chmod +x`)
    - `templates/sprints/` → `docs/issues/sprints/` (README + first-sprint template)
 2. `mkdir -p docs/issues/open docs/issues/done`
-3. Paste [`templates/CLAUDE-issues.md`](templates/CLAUDE-issues.md) into your
+3. Paste [`templates/issues-rules.md`](templates/issues-rules.md) into your
    repo's `CLAUDE.md`.
 4. Type `/todo`. Answer the two setup questions. Done.
 
 The script has no hardcoded paths — it finds the repo by walking up from the
 current directory until it sees `docs/issues/open/`. No `docs/issues/`? It
 prints nothing and exits cleanly.
+
+## Other agents (Codex, Cursor, anything AGENTS.md-aware)
+
+The system is agent-neutral at its core: the issues are plain markdown, the
+rules are plain markdown, and the renderer is stdlib Python you can run by
+hand — `python3 scripts/todo_status.py --full` works anywhere (the Claude
+Code hook plumbing is optional sugar).
+
+1. Copy `hooks/todo_status.py` → `scripts/todo_status.py`, plus
+   `templates/new-issue.sh` → `scripts/new-issue.sh` and
+   `templates/sprints/` → `docs/issues/sprints/`, and create
+   `docs/issues/open` + `docs/issues/done` (same as above).
+2. Give your agent the rules — one copy, don't duplicate per agent:
+   - **Codex / any AGENTS.md-aware tool**: paste
+     [`templates/issues-rules.md`](templates/issues-rules.md) into your
+     repo's `AGENTS.md` (or keep it as `docs/issues-rules.md` and add one
+     line to `AGENTS.md`: *"Read and follow docs/issues-rules.md"*).
+   - **Cursor**: keep the rules as `docs/issues-rules.md` and copy
+     [`templates/cursor-issues.mdc`](templates/cursor-issues.mdc) →
+     `.cursor/rules/issues.mdc` (an always-on rule that points at them).
+3. `/todo` equivalent:
+   - **Codex CLI**: copy
+     [`templates/codex-todo-prompt.md`](templates/codex-todo-prompt.md) →
+     `~/.codex/prompts/todo.md` and invoke it as `/todo`.
+   - **Anything else**: the rules file already tells the agent to run the
+     renderer and paste its output verbatim when you ask for the status —
+     or just run `python3 scripts/todo_status.py --full` yourself.
+
+Language for non-Claude installs: drop a `todo.config.json` next to the
+script — `{"lang": "en", "name": "my-project"}` (the interactive first-run
+setup is Claude Code-only).
 
 ## Why not GitHub Issues?
 
@@ -185,7 +218,9 @@ language but the command is still `git status`.
 commands/todo.md          # the /todo slash command (instructions for Claude)
 hooks/todo_status.py      # deterministic renderer — the only executable piece
 templates/
-  CLAUDE-issues.md        # the system's rules — paste into your CLAUDE.md
+  issues-rules.md         # the system's rules — CLAUDE.md / AGENTS.md / docs/
+  cursor-issues.mdc       # Cursor always-on rule pointing at the rules file
+  codex-todo-prompt.md    # /todo as a Codex CLI custom prompt
   new-issue.sh            # issue scaffolder
   sprints/                # sprints directory template (README + first sprint)
 examples/demo/            # toy project used to generate the README output

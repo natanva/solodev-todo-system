@@ -1,4 +1,10 @@
-# Issue & changelog management (paste into your CLAUDE.md)
+# Issue & changelog management (agent-neutral rules)
+
+> Paste this file's content into your agent's instructions file — `CLAUDE.md`
+> (Claude Code), `AGENTS.md` (Codex and other AGENTS.md-aware tools) — or keep
+> it as `docs/issues-rules.md` and point your agent at it (Cursor rule,
+> one-line reference). One copy is the source of truth; don't duplicate it
+> per agent.
 
 > **One single model: `issue`.** Bug, multi-phase plan, feature, chore — all of them are files in `docs/issues/`. What distinguishes them is the frontmatter `type:` field. What groups them is the `parent:` field. What tracks state is the directory (`open/` vs `done/`) + the `phases:` array for multi-phase work. Inspired by PEPs / KEPs / RFCs / ADRs.
 
@@ -108,3 +114,20 @@ Description of what was done and why.
 - Closing an issue with orphaned sub-issues in `open/` (`parent:` pointing at something already in `done/`).
 - Closing an issue without the 3 closure conditions (green verification + manual checks covered + user agreement).
 - Making commits that close features without updating the changelog.
+
+## The status listing (any agent)
+
+When the user asks for the issues status ("todo", "/todo", "status of the
+issues"), run the deterministic renderer and show its output **complete and
+verbatim** inside a single ``` block — never summarize, trim, reorder or
+reformat it; each line exactly as printed:
+
+```bash
+python3 scripts/todo_status.py --full
+```
+
+(Path per install: `scripts/todo_status.py` in the generic install,
+`.claude/hooks/todo_status.py` in the Claude Code install.) Options: `--lang
+en|es`; a `todo.config.json` next to the script (`{"lang": "en", "name":
+"<project>"}`) sets defaults. If it prints nothing, the repo has no
+`docs/issues/` layout — say so and stop; do not rebuild the analysis by hand.

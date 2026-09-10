@@ -818,11 +818,15 @@ def render(issues: list[dict], branch: str, status: str, log: list[str],
 
 def main() -> int:
     global LANG, REPO, ISSUES_OPEN, ISSUES_DONE, SPRINT_FILE, SPRINTS_DIR, PROJECT_NAME
-    try:
-        payload = json.load(sys.stdin)
-    except Exception:
-        return 0
-    repo = find_repo(payload.get("cwd") or "")
+    # cwd: from the hook payload on stdin (Claude Code), else the process cwd —
+    # so a bare `python3 todo_status.py --full` works for any agent or human.
+    payload = {}
+    if not sys.stdin.isatty():
+        try:
+            payload = json.load(sys.stdin)
+        except Exception:
+            payload = {}
+    repo = find_repo(payload.get("cwd") or os.getcwd())
     if repo is None:
         return 0
     REPO = repo
