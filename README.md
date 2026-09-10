@@ -112,6 +112,17 @@ system; the script just renders it.
 - **Close**: when verification is green, Claude proposes the move to `done/`
   plus the changelog entry; you say "ok".
 
+## Install: paste this to your agent
+
+> Look at https://github.com/natanva/solodev-todo-system and set it up in this
+> repo following its README install steps (the Claude Code path or the
+> other-agents path, whichever fits you). Then show me the status.
+
+That's the whole install for most people — you talk to an agent all day;
+installing this is one more sentence. The sections below are the exact steps
+your agent will follow, and the manual path if you'd rather copy the files
+yourself.
+
 ## Install for Claude Code (manual, ~2 minutes)
 
 1. Copy into your repo:
@@ -228,5 +239,9 @@ examples/demo/            # toy project used to generate the README output
 
 ## Status
 
-Pre-release. Extracted from a private production repo where it tracks ~40
-issues daily. Name, license and GitHub publication pending.
+Working and in daily use — extracted from a private production repo where it
+tracks ~80 issues across epics, sprints and a changelog. MIT licensed.
+
+---
+
+If this system saves you time, a ⭐ on the repo helps other solo devs find it.
