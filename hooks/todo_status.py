@@ -33,6 +33,13 @@ the epic header in the EPIC's group, whatever the child's own `status:` — a
 `[status]` badge on each child carries what the group no longer implies.
 Children of an epic never render in their own status group.
 
+QA: an epic (or plan) may carry its acceptance checklist as `qa:` — a list of
+`{id: Q1, text: "...", status: pending | pass | fail, checked: YYYY-MM-DD}`
+items; a `fail` names the member that fixes it with `issue: <slug>`. Rendered
+as `QA n/m` (+ failing ids, + ⚠ when a fail has no issue). Closing rule: every
+member closed AND every qa item in pass — an epic with no open members and a
+QA not in pass gets a "QA pending" warning instead of a closure hint.
+
 Sprints: one file per sprint in docs/issues/sprints/NNN-<slug>.md with
 `status: planned | active | closed` (at most ONE active). The active sprint
 shows as a banner on top and its members (includes + direct children of an
@@ -144,6 +151,8 @@ MESSAGES = {
         "warn_sprint_backlog": "sprint: include '{slug}' is in backlog — promote to ready/active or drop it from the sprint",
         "warn_active_no_sprint": "{name}: active but outside the sprint — include it or demote to ready",
         "warn_backlog_progress": "{name}: {n} phase(s) done but status backlog — work has started; promote to ready/active or supersede the remaining phases",
+        "warn_qa_fail_no_issue": "{name}: QA {ids} in fail without issue: — open the member that fixes it and reference it",
+        "warn_qa_pending": "{name}: every member is closed but QA is {p}/{t} — run it in prod (after deploy) before closing the epic",
         "files_of_record": "Files of record: docs/issues/open/, docs/issues/sprint.md, docs/issues/done/, docs/changelog.md",
         "files_of_record_sprints": "Files of record: docs/issues/open/, docs/issues/sprints/, docs/issues/done/, docs/changelog.md",
         "dig_deeper": "To dig deeper: read the issue file. `ls docs/issues/open/` is the index; `grep -l 'status: ready' docs/issues/open/*.md` to filter.",
@@ -193,6 +202,8 @@ MESSAGES = {
         "warn_sprint_backlog": "sprint: el include '{slug}' está en backlog — súbelo a ready/active o sácalo del sprint",
         "warn_active_no_sprint": "{name}: activo pero fuera del sprint — inclúyelo o bájalo a ready",
         "warn_backlog_progress": "{name}: {n} fase(s) done pero status backlog — hay trabajo empezado; súbelo a ready/active o marca superseded lo que quede",
+        "warn_qa_fail_no_issue": "{name}: QA {ids} en fail sin issue: — abre el miembro que lo arregla y referéncialo",
+        "warn_qa_pending": "{name}: todos los miembros cerrados pero el QA va {p}/{t} — pásalo en prod (tras deploy) antes de cerrar el epic",
         "files_of_record": "Archivos de referencia: docs/issues/open/, docs/issues/sprint.md, docs/issues/done/, docs/changelog.md",
         "files_of_record_sprints": "Archivos de referencia: docs/issues/open/, docs/issues/sprints/, docs/issues/done/, docs/changelog.md",
         "dig_deeper": "Para profundizar: lee el archivo del issue. `ls docs/issues/open/` es el índice; `grep -l 'status: ready' docs/issues/open/*.md` para filtrar.",
@@ -300,6 +311,47 @@ def summarize_phases(phases_raw: list[str] | str | None) -> tuple[str, int]:
     return ", ".join(parts), counts["done"]
 
 
+QA_TEXT_RE = re.compile(r"""\btext:\s*("[^"]*"|'[^']*')""")
+QA_STATUS_RE = re.compile(r"\bstatus:\s*(pending|pass|fail)\b")
+QA_ISSUE_RE = re.compile(r"\bissue:\s*([A-Za-z0-9._-]+)")
+
+
+def summarize_qa(qa_raw: list[str] | str | None) -> tuple[str, int, int, list[str]]:
+    """(summary, pass count, total, ids failing without issue) from `qa:`.
+
+    Summary reads `QA 2/6`, plus `, Q3 fail` when items fail and a trailing
+    ` ⚠` when some failing item names no `issue:`. The free `text:` segment is
+    stripped before matching so its words never pass for fields.
+    """
+    if not qa_raw or isinstance(qa_raw, str):
+        return "", 0, 0, []
+    n_pass = 0
+    fail_ids: list[str] = []
+    fail_no_issue: list[str] = []
+    total = 0
+    for item in qa_raw:
+        item = QA_TEXT_RE.sub("", item)
+        total += 1
+        m = QA_STATUS_RE.search(item)
+        st = m.group(1) if m else "pending"
+        id_m = re.search(r"\bid:\s*([A-Za-z0-9.]+)", item)
+        qid = id_m.group(1) if id_m else "?"
+        if st == "pass":
+            n_pass += 1
+        elif st == "fail":
+            fail_ids.append(qid)
+            if not QA_ISSUE_RE.search(item):
+                fail_no_issue.append(qid)
+    if total == 0:
+        return "", 0, 0, []
+    summary = f"QA {n_pass}/{total}"
+    if fail_ids:
+        summary += f", {','.join(fail_ids)} fail"
+    if fail_no_issue:
+        summary += " ⚠"
+    return summary, n_pass, total, fail_no_issue
+
+
 def extract_h1(text: str) -> str:
     """First `# Heading` line after the frontmatter, truncated to 90 chars."""
     body_start = text.find("\n---", 4)
@@ -330,6 +382,7 @@ def read_issue(path: Path) -> dict | None:
     if not fm:
         return None
     phases_summary, phases_done = summarize_phases(fm.get("phases"))
+    qa_summary, qa_pass, qa_total, qa_fail_no_issue = summarize_qa(fm.get("qa"))
     return {
         "name": path.stem,
         "type": _str_field(fm, "type") or "plan",
@@ -337,6 +390,10 @@ def read_issue(path: Path) -> dict | None:
         "priority": _str_field(fm, "priority") or "MEDIA",
         "phases_summary": phases_summary,
         "phases_done": phases_done,
+        "qa_summary": qa_summary,
+        "qa_pass": qa_pass,
+        "qa_total": qa_total,
+        "qa_fail_no_issue": qa_fail_no_issue,
         "parent": _str_field(fm, "parent"),
         "blocked_by_closure_of": _str_field(fm, "blocked_by_closure_of"),
         "blocked_by": _str_field(fm, "blocked_by"),
@@ -503,6 +560,17 @@ def annotate(issues: list[dict], sprints: dict) -> tuple[list[str], set[str]]:
         if it["group"] == "backlog" and it["phases_done"]:
             warnings.append(t("warn_backlog_progress", name=it["name"], n=it["phases_done"]))
 
+        # QA: a fail must name the member that fixes it; an epic whose members
+        # are all closed is not closable until its QA passes (run in prod).
+        if it["qa_fail_no_issue"]:
+            warnings.append(t("warn_qa_fail_no_issue", name=it["name"],
+                              ids=",".join(it["qa_fail_no_issue"])))
+        if (it["type"] == "epic" and it["qa_total"] and it["qa_pass"] < it["qa_total"]
+                and it["group"] in ("active", "ready")
+                and not any(o["parent"] == it["name"] for o in issues)):
+            warnings.append(t("warn_qa_pending", name=it["name"],
+                              p=it["qa_pass"], t=it["qa_total"]))
+
     active_sp = sprints.get("active")
     sprint_slugs: set[str] = set()
     if active_sp:
@@ -565,6 +633,8 @@ def render_item(it: dict, connector: str | None = None,
     extras = []
     if it["phases_summary"]:
         extras.append(it["phases_summary"])
+    if it["qa_summary"]:
+        extras.append(it["qa_summary"])
     extras.extend(it.get("chain", []))
     if it["frozen_by"]:
         extras.append(f"frozen_by: {it['frozen_by']}")
@@ -595,6 +665,8 @@ def render_epic_header(it: dict, sprint: set | None = None) -> str:
     extras = []
     if it["phases_summary"]:
         extras.append(it["phases_summary"])
+    if it["qa_summary"]:
+        extras.append(it["qa_summary"])
     extras.extend(it.get("chain", []))
     if it["frozen_by"]:
         extras.append(f"frozen_by: {it['frozen_by']}")

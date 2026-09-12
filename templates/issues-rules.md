@@ -40,6 +40,10 @@ phases:                         # optional: for type=plan|epic with multiple pha
   - {id: F0, status: done, closed: YYYY-MM-DD}
   - {id: F1, status: active}
   - {id: F2, status: blocked, blocked_by: F1}
+qa:                             # optional: an epic's closure QA (allowed on plan), one item per line
+  - {id: Q1, text: "<what is tested>", status: pass, checked: YYYY-MM-DD}
+  - {id: Q2, text: "<what is tested>", status: fail, checked: YYYY-MM-DD, issue: <slug-of-the-member-that-fixes-it>}
+  - {id: Q3, text: "<what is tested>", status: pending}
 ---
 ```
 
@@ -57,6 +61,8 @@ phases:                         # optional: for type=plan|epic with multiple pha
 
 `phases[].status ∈ {done, active, blocked, pending, superseded}`. **Each phase's status is source of truth in the frontmatter, NOT in body prose.** The body describes what was done and why. Phase-level `blocked`/`blocked_by:` is the plan's internal vocabulary (it references phase IDs, e.g. `blocked_by: C1`) and does not collide with the issue-level fields (which reference slugs).
 
+`qa[].status ∈ {pending, pass, fail}` — an epic's **closure QA**: the list of what you check by using the product to accept the epic. **Source of truth in the frontmatter, not a checklist in the body.** The renderer prints `QA n/m` next to the epic, `⚠` when a `fail` names no `issue:`, and a "QA pending" warning when every member is closed but the QA is not in pass. The cycle is explicit: QA `fail` » new member (referenced in `issue:`) » member closed » QA again » `pass` » epic closed. A "live test of …" chore as a member is no longer the pattern.
+
 ## Automatic rules (execute WITHOUT the user asking)
 
 **When designing a new idea or receiving a bug**:
@@ -70,6 +76,10 @@ phases:                         # optional: for type=plan|epic with multiple pha
 **When completing a phase**:
 - Update `phases[].status: done` and `closed: YYYY-MM-DD` in the frontmatter.
 - Do NOT write "Status: DONE" in the section body. Body = narrative prose (what, why, commits).
+
+**When running an epic's QA**:
+- Run it **in the target environment after deploy** (never local-only when the project has a production step — same rule as closing issues).
+- Each item: `status: pass | fail` + `checked: YYYY-MM-DD`. A `fail` opens a new member (`parent: <epic>`) and references it in `issue:`; no patching on the spot.
 
 **When closing a whole issue (move to `done/`)**:
 
@@ -85,7 +95,8 @@ Closure steps:
 2. Add `completed: YYYY-MM-DD` to the frontmatter.
 3. If the issue had `phases:`, all of them must be `status: done` or `superseded` before the move.
 4. **Sub-issues check**: if other issues in `open/` have `parent: <this>`, they are orphaned children — re-evaluate them (close too, reparent, or promote to top-level) before closing the parent.
-5. Add an entry to `docs/changelog.md`.
+5. **QA check (epics)**: an epic closes when every member is closed or reparented **and** every `qa:` item is in `pass`. While any item is not in pass, the renderer does not suggest closing it.
+6. Add an entry to `docs/changelog.md`.
 
 **When making a commit that advances or closes an issue**:
 1. Update the issue's frontmatter (phase status, completed, etc.).
@@ -112,6 +123,7 @@ Description of what was done and why.
 - Phase status in body prose (`**Status:** ✅ DONE`) — it duplicates the frontmatter and drifts. Body = what/why/commits; frontmatter = structured status.
 - Closing an issue (`open/ → done/`) without updating `phases[].status` and `completed:` in the frontmatter.
 - Closing an issue with orphaned sub-issues in `open/` (`parent:` pointing at something already in `done/`).
+- Closing an epic with `qa:` items outside `pass`, or running a QA local-only instead of in the target environment.
 - Closing an issue without the 3 closure conditions (green verification + manual checks covered + user agreement).
 - Making commits that close features without updating the changelog.
 

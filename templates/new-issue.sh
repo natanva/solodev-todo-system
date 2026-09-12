@@ -52,13 +52,20 @@ fi
 
 TODAY="$(date +%Y-%m-%d)"
 
+# Epics carry their closure QA as `qa:` in the frontmatter (the renderer
+# ignores commented lines, so the example is inert until uncommented).
+QA_BLOCK=""
+if [[ "$TYPE" == "epic" ]]; then
+    QA_BLOCK=$'# qa:                       # closure QA (run in the target environment after deploy); uncomment and fill in\n#   - {id: Q1, text: "<what is tested>", status: pending}\n'
+fi
+
 cat > "$PATH_FULL" <<EOF
 ---
 type: ${TYPE}
 status: backlog
 priority: ${PRIORITY}
 created: ${TODAY}
----
+${QA_BLOCK}---
 
 # ${TITLE}
 

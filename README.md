@@ -24,7 +24,7 @@ Issues (6 files in docs/issues/open/) — committed: 2 active · 1 ready | uncom
  🔨 Active — being worked on now (3)
 ───────────────────────────────────────────────────────────
 
-  ▸ epic epic-launch-mvp [ALTA] · 1/3 done, F1 active, F2 blocked 🎯
+  ▸ epic epic-launch-mvp [ALTA] · 1/3 done, F1 active, F2 blocked · QA 1/3 🎯
           Launch-ready MVP
     ├─ ▲ ALTA  [active]  plan-landing-page · 1/2 done, F1 active 🎯
     │                    Landing page + waitlist form
@@ -79,7 +79,11 @@ instead of a generic todo list:
   with *won't start yet* with *waiting for me to decide*.
 - **Epics** (`type: epic`) group plans/bugs/chores via `parent:` and always
   render as one tree — every child nests under its epic with a `[status]` badge,
-  never scattered across status groups.
+  never scattered across status groups. An epic carries its **closure QA** as
+  `qa:` items (`pending | pass | fail`), rendered `QA n/m`: it closes when every
+  member is closed *and* every item passes; a `fail` names the member that
+  fixes it (⚠ if it doesn't), and "all members closed, QA not in pass" is a
+  warning, not a closure hint.
 - **Sprints open, run and close.** One file per sprint in `docs/issues/sprints/`
   (`NNN-<slug>.md`, `status: planned | active | closed`). Only one is active at
   a time (⚠ if more); its members get 🎯 and closed includes stay listed as the

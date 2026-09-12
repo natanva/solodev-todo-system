@@ -35,7 +35,9 @@ listed (the renderer marks them 🎯 too).
 4. **Close**: when every include is closed (the renderer tells you), review
    the sprint, set `status: closed` + `closed:`, and activate the next
    planned one. An unfinished include moves **explicitly** (your decision)
-   to the next sprint or back to backlog — never silently.
+   to the next sprint or back to backlog — never silently. A sprint that
+   includes an epic does not close until the epic's `qa:` is in pass: the
+   epic only moves to `done/` then (see the rules file).
 
 ## Invariants (the renderer watches these and prints ⚠)
 
